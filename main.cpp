@@ -29,10 +29,12 @@ struct Vertex {
 
 struct Face {
     int v1, v2, v3;
+    float normal[3];
 };
 
 std::vector<Vertex> vertices;
 std::vector<Face> faces;
+std::vector<std::vector<float>> vertexNormals;
 
 std::vector<Vertex> transformedVertices;
 std::vector<Face> transformedFaces;
@@ -73,6 +75,54 @@ bool loadOBJ(const char* path) {
 
     return true;
 }
+void calculateFaceNormals() {
+    for (auto& face : faces) {
+        Vertex v1 = vertices[face.v1];
+        Vertex v2 = vertices[face.v2];
+        Vertex v3 = vertices[face.v3];
+
+        float normal[3];
+        float u[3] = {v2.x - v1.x, v2.y - v1.y, v2.z - v1.z};
+        float v[3] = {v3.x - v1.x, v3.y - v1.y, v3.z - v1.z};
+
+        normal[0] = u[1] * v[2] - u[2] * v[1];
+        normal[1] = u[2] * v[0] - u[0] * v[2];
+        normal[2] = u[0] * v[1] - u[1] * v[0];
+
+        float length = std::sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
+
+        face.normal[0] = normal[0] / length;
+        face.normal[1] = normal[1] / length;
+        face.normal[2] = normal[2] / length;
+    }
+}
+void calculateVertexNormals() {
+    vertexNormals.resize(vertices.size());
+    for (auto& normal : vertexNormals) {
+        normal = {0.0f, 0.0f, 0.0f};
+    }
+
+    for (const auto& face : faces) {
+        vertexNormals[face.v1][0] += face.normal[0];
+        vertexNormals[face.v1][1] += face.normal[1];
+        vertexNormals[face.v1][2] += face.normal[2];
+
+        vertexNormals[face.v2][0] += face.normal[0];
+        vertexNormals[face.v2][1] += face.normal[1];
+        vertexNormals[face.v2][2] += face.normal[2];
+
+        vertexNormals[face.v3][0] += face.normal[0];
+        vertexNormals[face.v3][1] += face.normal[1];
+        vertexNormals[face.v3][2] += face.normal[2];
+    }
+
+    for (auto& normal : vertexNormals) {
+        float length = std::sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
+        normal[0] /= length;
+        normal[1] /= length;
+        normal[2] /= length;
+    }
+}
 void scaleModel(float scaleFactor) {
     for (auto& vertex : vertices) {
         vertex.x *= scaleFactor;
@@ -92,8 +142,7 @@ void scaleModel(float scaleFactor) {
 }
 
 void drawModelWireframe(const std::vector<Vertex>& modelVertices, const std::vector<Face>& modelFaces) {
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    glBegin(GL_TRIANGLES);
+    glBegin(GL_LINES);
     for (const auto& face : modelFaces) {
         const Vertex& v1 = modelVertices[face.v1];
         const Vertex& v2 = modelVertices[face.v2];
@@ -101,10 +150,14 @@ void drawModelWireframe(const std::vector<Vertex>& modelVertices, const std::vec
 
         glVertex3f(v1.x, v1.y, v1.z);
         glVertex3f(v2.x, v2.y, v2.z);
+
+        glVertex3f(v2.x, v2.y, v2.z);
         glVertex3f(v3.x, v3.y, v3.z);
+
+        glVertex3f(v3.x, v3.y, v3.z);
+        glVertex3f(v1.x, v1.y, v1.z);
     }
     glEnd();
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
 void drawModelFilled(const std::vector<Vertex>& modelVertices, const std::vector<Face>& modelFaces) {
@@ -114,8 +167,16 @@ void drawModelFilled(const std::vector<Vertex>& modelVertices, const std::vector
         const Vertex& v2 = modelVertices[face.v2];
         const Vertex& v3 = modelVertices[face.v3];
 
+        const auto& n1 = vertexNormals[face.v1];
+        const auto& n2 = vertexNormals[face.v2];
+        const auto& n3 = vertexNormals[face.v3];
+
+
+        glNormal3f(n1[0], n1[1], n1[2]);
         glVertex3f(v1.x, v1.y, v1.z);
+        glNormal3f(n2[0], n2[1], n2[2]);
         glVertex3f(v2.x, v2.y, v2.z);
+        glNormal3f(n3[0], n3[1], n3[2]);
         glVertex3f(v3.x, v3.y, v3.z);
     }
     glEnd();
@@ -128,8 +189,16 @@ void drawModelFilled(const std::vector<Vertex>& modelVertices, const std::vector
         const Vertex& v2 = modelVertices[face.v2];
         const Vertex& v3 = modelVertices[face.v3];
 
+
+        const auto& n1 = vertexNormals[face.v1];
+        const auto& n2 = vertexNormals[face.v2];
+        const auto& n3 = vertexNormals[face.v3];
+
+        glNormal3f(n1[0], n1[1], n1[2]);
         glVertex3f(v1.x, v1.y, v1.z);
+        glNormal3f(n2[0], n2[1], n2[2]);
         glVertex3f(v2.x, v2.y, v2.z);
+        glNormal3f(n3[0], n3[1], n3[2]);
         glVertex3f(v3.x, v3.y, v3.z);
     }
     glEnd();
@@ -219,6 +288,10 @@ void setupLight() {
     glLightfv(GL_LIGHT0, GL_AMBIENT, lightAmbient);
     glLightfv(GL_LIGHT0, GL_DIFFUSE, lightDiffuse);
     glLightfv(GL_LIGHT0, GL_SPECULAR, lightSpecular);
+
+
+    glEnable(GL_COLOR_MATERIAL);
+    glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
 }
 void copyModel() {
     transformedVertices = vertices;
@@ -384,21 +457,39 @@ void printTransformations() {
         std::cout << transformation << std::endl;
     }
 }
-void setupMaterial(const GLfloat* ambient, const GLfloat* diffuse, const GLfloat* specular, GLfloat shininess) {
-    glMaterialfv(GL_FRONT, GL_AMBIENT, ambient);
-    glMaterialfv(GL_FRONT, GL_DIFFUSE, diffuse);
-    glMaterialfv(GL_FRONT, GL_SPECULAR, specular);
-    glMaterialf(GL_FRONT, GL_SHININESS, shininess);
+void setupMaterial() {
+
+    GLfloat modelAmbient[] = {0.2f, 0.2f, 0.2f, 1.0f};
+    GLfloat modelDiffuse[] = {0.8f, 0.8f, 0.8f, 1.0f};
+    GLfloat modelSpecular[] = {1.0f, 1.0f, 1.0f, 1.0f};
+    GLfloat modelShininess = 50.0f;
+
+    glMaterialfv(GL_FRONT, GL_AMBIENT, modelAmbient);
+    glMaterialfv(GL_FRONT, GL_DIFFUSE, modelDiffuse);
+    glMaterialfv(GL_FRONT, GL_SPECULAR, modelSpecular);
+    glMaterialf(GL_FRONT, GL_SHININESS, modelShininess);
 }
-int main() {
+
+int main(int argc, char* argv[]) {
+    if (argc != 2) {
+        std::cerr << "Usage: " << argv[0] << " <file_path>" << std::endl;
+        return 1;
+    }
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW\n";
         return -1;
     }
-    if (!loadOBJ("/home/kegure/CLionProjects/untitled4/DonutMaiara.obj")) {
+
+    if (!loadOBJ(argv[1])) {
         return -1;
     }
+    /*if (!loadOBJ("/home/kegure/CLionProjects/untitled4/DonutMaiara.obj")) {
+        return -1;
+    }*/
     copyModel();
+
+    calculateFaceNormals();
+    calculateVertexNormals();
 
     float scaleFactor = 10.0;
     scaleModel(scaleFactor);
@@ -425,10 +516,8 @@ int main() {
     glEnable(GL_DEPTH_TEST);
     glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
 
-    GLfloat modelAmbient[] = {0.2f, 0.2f, 0.2f, 1.0f};
-    GLfloat modelDiffuse[] = {0.8f, 0.8f, 0.8f, 1.0f};
-    GLfloat modelSpecular[] = {1.0f, 1.0f, 1.0f, 1.0f};
-    GLfloat modelShininess = 50.0f;
+
+
     while (!glfwWindowShouldClose(window)) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         if (lightEnabled) {
@@ -443,7 +532,7 @@ int main() {
         glRotatef(rotationY, 0.0f, 1.0f, 0.0f);
 
         draw_axes();
-        setupMaterial(modelAmbient, modelDiffuse, modelSpecular, modelShininess);
+        setupMaterial();
         glColor3f(0.0f, 0.0f, 1.0f); // Azul
         drawModel(vertices, faces);
 
@@ -458,15 +547,11 @@ int main() {
         drawModel(transformedVertices, transformedFaces);
         glPopMatrix();
 
-
         glPopMatrix();
-
-
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-
     glfwTerminate();
     return 0;
 }
