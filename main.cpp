@@ -39,6 +39,7 @@ std::vector<std::vector<float>> vertexNormals;
 std::vector<Vertex> transformedVertices;
 std::vector<Face> transformedFaces;
 std::vector<Vertex> previousTransformedVertices;
+std::vector<Face> previousTransformedFaces;
 
 bool loadOBJ(const char* path) {
     std::ifstream file(path);
@@ -72,9 +73,9 @@ bool loadOBJ(const char* path) {
             transformations.push_back(line);
         }
     }
-
     return true;
 }
+
 void calculateFaceNormals() {
     for (auto& face : faces) {
         Vertex v1 = vertices[face.v1];
@@ -297,6 +298,7 @@ void copyModel() {
     transformedVertices = vertices;
     transformedFaces = faces;
     previousTransformedVertices = vertices;
+    previousTransformedFaces= faces;
 }
 
 void disableLight() {
@@ -364,8 +366,8 @@ void applyReflection(float ex, float ey, float ez) {
     std::cout << "Reflection: " << ex << ", " << ey << ", " << ez << std::endl;
 }
 
-void applyTransformations() {
-    for (int i = 0; i <= currentTransformationIndex; ++i) {
+void applyTransformations(int transformationIndex) {
+    for (int i = 0; i <= transformationIndex; ++i) {
         std::istringstream iss(transformations[i]);
         std::string type;
         iss >> type;
@@ -423,7 +425,6 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) {
         if (currentTransformationIndex < static_cast<int>(transformations.size()) - 1) {
             currentTransformationIndex++;
-            previousTransformedVertices = transformedVertices;
         } else {
             currentTransformationIndex = -1;
             copyModel();
@@ -491,7 +492,7 @@ int main(int argc, char* argv[]) {
     calculateFaceNormals();
     calculateVertexNormals();
 
-    float scaleFactor = 10.0;
+    float scaleFactor = 7.0;
     scaleModel(scaleFactor);
     GLFWwindow* window = glfwCreateWindow(640, 480, "Visualizador 3D", NULL, NULL);
     if (!window) {
@@ -520,7 +521,7 @@ int main(int argc, char* argv[]) {
 
     while (!glfwWindowShouldClose(window)) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        if (lightEnabled) {
+        if (lightEnabled && currentDisplayMode == FILLED) {
             glEnable(GL_LIGHTING);
         } else {
             glDisable(GL_LIGHTING);
@@ -533,18 +534,23 @@ int main(int argc, char* argv[]) {
 
         draw_axes();
         setupMaterial();
-        glColor3f(0.0f, 0.0f, 1.0f); // Azul
-        drawModel(vertices, faces);
-
-        if (currentTransformationIndex >= 0) {
-            glColor3f(0.0f, 1.0f, 0.0f);
-            drawModel(previousTransformedVertices, transformedFaces);
+        if(currentTransformationIndex == -1 ){
+            glColor3f(0.0f, 0.0f, 1.0f); // Azul
+            drawModel(vertices, faces);
         }
 
+
+
         glPushMatrix();
-        applyTransformations();
+        if (currentTransformationIndex >= 0) {
+            applyTransformations(currentTransformationIndex - 1);
+            glColor3f(0.0f, 1.0f, 0.0f);
+            drawModel(previousTransformedVertices, previousTransformedFaces);
+        }
+        applyTransformations(currentTransformationIndex);
         glColor3f(1.0f, 0.0f, 0.0f);
         drawModel(transformedVertices, transformedFaces);
+
         glPopMatrix();
 
         glPopMatrix();
